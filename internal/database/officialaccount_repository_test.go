@@ -227,8 +227,10 @@ func TestOfficialAccountRepositoryMigrationVersionIncludesCatalog(t *testing.T) 
 	if err != nil {
 		t.Fatalf("get schema version: %v", err)
 	}
-	if version != 20 {
-		t.Fatalf("schema version = %d, want 20", version)
+	// 这里断言的是「迁移链包含公众号目录那次迁移」，而不是「版本号恰好等于 N」，
+	// 否则每新增一次迁移都会误报。
+	if version < 20 {
+		t.Fatalf("schema version = %d, want >= 20", version)
 	}
 	var videoColumnCount int
 	if err := db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('mp_articles') WHERE name = 'video_id'").Scan(&videoColumnCount); err != nil {

@@ -184,3 +184,51 @@ type RadarVideoSummary struct {
 	Title   string `json:"title"`
 	IsNew   bool   `json:"is_new"` // true=新视频并已加入队列，false=已存在
 }
+
+// RadarVideo 表示雷达在账号主页采集到的一条视频的完整数据。
+// 每次轮询都会 upsert：互动数（点赞/评论/收藏/转发/播放）保持最新，
+// 而 FirstSeenAt 保留首次发现的顺序，供控制台「视频数据」页签展示。
+type RadarVideo struct {
+	ID           string    `json:"id"`
+	VideoID      string    `json:"videoId"`
+	TargetID     string    `json:"targetId"`
+	Username     string    `json:"username"`
+	AuthorName   string    `json:"authorName"`
+	AuthorAvatar string    `json:"authorAvatar"`
+	NonceID      string    `json:"nonceId"`
+	Title        string    `json:"title"`
+	MediaType    int       `json:"mediaType"`
+	CreateTime   int64     `json:"createTime"` // 视频发布时间，Unix 秒
+	CoverURL     string    `json:"coverUrl"`
+	ThumbURL     string    `json:"thumbUrl"`
+	VideoURL     string    `json:"videoUrl"`
+	DecryptKey   string    `json:"decryptKey"`
+	FileSize     int64     `json:"fileSize"`
+	Duration     int64     `json:"duration"` // 秒
+	Resolution   string    `json:"resolution"`
+	FileFormat   string    `json:"fileFormat"`
+	ReadCount    int64     `json:"readCount"`    // 播放量
+	LikeCount    int64     `json:"likeCount"`    // 点赞
+	CommentCount int64     `json:"commentCount"` // 评论
+	FavCount     int64     `json:"favCount"`     // 收藏
+	ForwardCount int64     `json:"forwardCount"` // 转发
+	IPRegion     string    `json:"ipRegion"`     // 发布位置
+	PageURL      string    `json:"pageUrl"`
+	IsNew        bool      `json:"isNew"`
+	Raw          string    `json:"-"` // 原始 feed JSON，便于后续补字段
+	FirstSeenAt  time.Time `json:"firstSeenAt"`
+	LastSeenAt   time.Time `json:"lastSeenAt"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+}
+
+// RadarVideoFilter 视频数据页签的查询条件
+type RadarVideoFilter struct {
+	PaginationParams
+	TargetID string `json:"targetId"`
+	Username string `json:"username"`
+	Query    string `json:"query"`     // 模糊匹配标题/作者
+	OnlyNew  bool   `json:"onlyNew"`   // 仅首次发现的新视频
+	StartDay *time.Time `json:"startDay"` // 视频发布时间下界
+	EndDay   *time.Time `json:"endDay"`
+}

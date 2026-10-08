@@ -196,11 +196,9 @@ var WXU = (() => {
         id: feed.id,
         nonce_id: feed.objectNonceId,
         title: clean_html_tags(feed.objectDesc.description),
-        url: typeof __wx_channels_join_video_url_parts__ === "function"
-          ? __wx_channels_join_video_url_parts__(media.url, media.urlToken || media.url_token || media.urltoken)
-          : (media.url || "") + (media.urlToken || media.url_token || media.urltoken || ""),
+        url: media.url + media.urlToken,
         originalUrl: media.url,
-        urlToken: media.urlToken || media.url_token || media.urltoken || "",
+        urlToken: media.urlToken || "",
         key: media.decodeKey,
         cover_url: media.coverUrl,
         coverUrl: media.thumbUrl,

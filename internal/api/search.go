@@ -324,7 +324,7 @@ func normalizeFeedProfileURL(raw string) string {
 		return ""
 	}
 
-	decoded, err := url.PathUnescape(raw)
+	decoded, err := url.QueryUnescape(raw)
 	if err == nil {
 		return decoded
 	}
@@ -351,11 +351,11 @@ func isSharedFeedURL(raw string) bool {
 		if !strings.HasPrefix(parsed.Path, prefix) {
 			return false
 		}
-		token := strings.Trim(parsed.Path[len(prefix):], "/")
+		token := strings.TrimPrefix(parsed.Path, prefix)
 		return isSharedFeedToken(token)
 	case strings.EqualFold(parsed.Hostname(), "channels.weixin.qq.com"):
 		return parsed.Fragment == "" &&
-			strings.TrimRight(parsed.Path, "/") == "/finder-preview/pages/sph" &&
+			parsed.Path == "/finder-preview/pages/sph" &&
 			isSharedFeedToken(parsed.Query().Get("id"))
 	default:
 		return false

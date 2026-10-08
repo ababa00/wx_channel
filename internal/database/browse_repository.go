@@ -45,9 +45,16 @@ func (r *BrowseHistoryRepository) Create(record *BrowseRecord) error {
 // GetByID 根据 ID 获取浏览记录
 func (r *BrowseHistoryRepository) GetByID(id string) (*BrowseRecord, error) {
 	query := `
-		SELECT id, title, author, author_id, duration, size, COALESCE(resolution, '') as resolution, cover_url, video_url,
-			decrypt_key, browse_time, like_count, comment_count, 
-			COALESCE(fav_count, 0) as fav_count, COALESCE(forward_count, 0) as forward_count, page_url,
+		SELECT id, title, author, COALESCE(author_id, '') as author_id, COALESCE(duration, 0) as duration,
+			COALESCE(size, 0) as size, COALESCE(resolution, '') as resolution,
+			COALESCE(cover_url, '') as cover_url, COALESCE(video_url, '') as video_url,
+			COALESCE(decrypt_key, '') as decrypt_key, browse_time, COALESCE(like_count, 0) as like_count,
+			COALESCE(comment_count, 0) as comment_count, COALESCE(fav_count, 0) as fav_count,
+			COALESCE(forward_count, 0) as forward_count, COALESCE(page_url, '') as page_url,
+			-- 时间列刻意不套 COALESCE：那样 SQLite 会以 TEXT 返回该值，
+			-- 驱动就无法扫进 *time.Time，会报 "unsupported Scan, storing
+			-- driver.Value type string into type *time.Time"。
+			-- created_at/updated_at 本身带 DEFAULT CURRENT_TIMESTAMP，不会是 NULL。
 			created_at, updated_at
 		FROM browse_history WHERE id = ?
 	`
@@ -178,9 +185,12 @@ func (r *BrowseHistoryRepository) List(params *PaginationParams) (*PagedResult[B
 	offset := (params.Page - 1) * params.PageSize
 
 	query := fmt.Sprintf(`
-		SELECT id, title, author, author_id, duration, size, COALESCE(resolution, '') as resolution, cover_url, video_url,
-			decrypt_key, browse_time, like_count, comment_count, 
-			COALESCE(fav_count, 0) as fav_count, COALESCE(forward_count, 0) as forward_count, page_url,
+		SELECT id, title, author, COALESCE(author_id, '') as author_id, COALESCE(duration, 0) as duration,
+			COALESCE(size, 0) as size, COALESCE(resolution, '') as resolution,
+			COALESCE(cover_url, '') as cover_url, COALESCE(video_url, '') as video_url,
+			COALESCE(decrypt_key, '') as decrypt_key, browse_time, COALESCE(like_count, 0) as like_count,
+			COALESCE(comment_count, 0) as comment_count, COALESCE(fav_count, 0) as fav_count,
+			COALESCE(forward_count, 0) as forward_count, COALESCE(page_url, '') as page_url,
 			created_at, updated_at
 		FROM browse_history
 		ORDER BY %s %s
@@ -243,9 +253,12 @@ func (r *BrowseHistoryRepository) Search(query string, params *PaginationParams)
 	// Build query
 	offset := (params.Page - 1) * params.PageSize
 	sqlQuery := `
-		SELECT id, title, author, author_id, duration, size, COALESCE(resolution, '') as resolution, cover_url, video_url,
-			decrypt_key, browse_time, like_count, comment_count, 
-			COALESCE(fav_count, 0) as fav_count, COALESCE(forward_count, 0) as forward_count, page_url,
+		SELECT id, title, author, COALESCE(author_id, '') as author_id, COALESCE(duration, 0) as duration,
+			COALESCE(size, 0) as size, COALESCE(resolution, '') as resolution,
+			COALESCE(cover_url, '') as cover_url, COALESCE(video_url, '') as video_url,
+			COALESCE(decrypt_key, '') as decrypt_key, browse_time, COALESCE(like_count, 0) as like_count,
+			COALESCE(comment_count, 0) as comment_count, COALESCE(fav_count, 0) as fav_count,
+			COALESCE(forward_count, 0) as forward_count, COALESCE(page_url, '') as page_url,
 			created_at, updated_at
 		FROM browse_history
 		WHERE title LIKE ? OR author LIKE ?
@@ -298,9 +311,12 @@ func (r *BrowseHistoryRepository) GetRecent(limit int) ([]BrowseRecord, error) {
 	}
 
 	query := `
-		SELECT id, title, author, author_id, duration, size, COALESCE(resolution, '') as resolution, cover_url, video_url,
-			decrypt_key, browse_time, like_count, comment_count, 
-			COALESCE(fav_count, 0) as fav_count, COALESCE(forward_count, 0) as forward_count, page_url,
+		SELECT id, title, author, COALESCE(author_id, '') as author_id, COALESCE(duration, 0) as duration,
+			COALESCE(size, 0) as size, COALESCE(resolution, '') as resolution,
+			COALESCE(cover_url, '') as cover_url, COALESCE(video_url, '') as video_url,
+			COALESCE(decrypt_key, '') as decrypt_key, browse_time, COALESCE(like_count, 0) as like_count,
+			COALESCE(comment_count, 0) as comment_count, COALESCE(fav_count, 0) as fav_count,
+			COALESCE(forward_count, 0) as forward_count, COALESCE(page_url, '') as page_url,
 			created_at, updated_at
 		FROM browse_history
 		ORDER BY browse_time DESC
@@ -347,9 +363,12 @@ func (r *BrowseHistoryRepository) DeleteBefore(date time.Time) (int64, error) {
 // GetAll 获取所有浏览记录（用于导出）
 func (r *BrowseHistoryRepository) GetAll() ([]BrowseRecord, error) {
 	query := `
-		SELECT id, title, author, author_id, duration, size, COALESCE(resolution, '') as resolution, cover_url, video_url,
-			decrypt_key, browse_time, like_count, comment_count, 
-			COALESCE(fav_count, 0) as fav_count, COALESCE(forward_count, 0) as forward_count, page_url,
+		SELECT id, title, author, COALESCE(author_id, '') as author_id, COALESCE(duration, 0) as duration,
+			COALESCE(size, 0) as size, COALESCE(resolution, '') as resolution,
+			COALESCE(cover_url, '') as cover_url, COALESCE(video_url, '') as video_url,
+			COALESCE(decrypt_key, '') as decrypt_key, browse_time, COALESCE(like_count, 0) as like_count,
+			COALESCE(comment_count, 0) as comment_count, COALESCE(fav_count, 0) as fav_count,
+			COALESCE(forward_count, 0) as forward_count, COALESCE(page_url, '') as page_url,
 			created_at, updated_at
 		FROM browse_history
 		ORDER BY browse_time DESC
@@ -397,9 +416,12 @@ func (r *BrowseHistoryRepository) GetByIDs(ids []string) ([]BrowseRecord, error)
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, title, author, author_id, duration, size, COALESCE(resolution, '') as resolution, cover_url, video_url,
-			decrypt_key, browse_time, like_count, comment_count, 
-			COALESCE(fav_count, 0) as fav_count, COALESCE(forward_count, 0) as forward_count, page_url,
+		SELECT id, title, author, COALESCE(author_id, '') as author_id, COALESCE(duration, 0) as duration,
+			COALESCE(size, 0) as size, COALESCE(resolution, '') as resolution,
+			COALESCE(cover_url, '') as cover_url, COALESCE(video_url, '') as video_url,
+			COALESCE(decrypt_key, '') as decrypt_key, browse_time, COALESCE(like_count, 0) as like_count,
+			COALESCE(comment_count, 0) as comment_count, COALESCE(fav_count, 0) as fav_count,
+			COALESCE(forward_count, 0) as forward_count, COALESCE(page_url, '') as page_url,
 			created_at, updated_at
 		FROM browse_history
 		WHERE id IN (%s)
@@ -444,9 +466,12 @@ func (r *BrowseHistoryRepository) GetRecordsSince(since time.Time, limit int) ([
 	}
 
 	query := `
-		SELECT id, title, author, author_id, duration, size, COALESCE(resolution, '') as resolution, cover_url, video_url,
-			decrypt_key, browse_time, like_count, comment_count, 
-			COALESCE(fav_count, 0) as fav_count, COALESCE(forward_count, 0) as forward_count, page_url,
+		SELECT id, title, author, COALESCE(author_id, '') as author_id, COALESCE(duration, 0) as duration,
+			COALESCE(size, 0) as size, COALESCE(resolution, '') as resolution,
+			COALESCE(cover_url, '') as cover_url, COALESCE(video_url, '') as video_url,
+			COALESCE(decrypt_key, '') as decrypt_key, browse_time, COALESCE(like_count, 0) as like_count,
+			COALESCE(comment_count, 0) as comment_count, COALESCE(fav_count, 0) as fav_count,
+			COALESCE(forward_count, 0) as forward_count, COALESCE(page_url, '') as page_url,
 			created_at, updated_at
 		FROM browse_history
 		WHERE updated_at > ?

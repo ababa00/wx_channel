@@ -438,11 +438,7 @@ func SanitizeCatalogAsset(asset ArticleAsset) ArticleAsset {
 	asset.ResourceKey = strings.TrimSpace(asset.ResourceKey)
 	asset.Kind = strings.TrimSpace(asset.Kind)
 	asset.Role = strings.TrimSpace(asset.Role)
-	if asset.Kind == ArchiveResourceKindVideo || asset.Kind == ArchiveResourceKindAudio {
-		asset.SourceURL = SanitizeCatalogMediaURL(asset.SourceURL)
-	} else {
-		asset.SourceURL = SanitizeArchiveMetadataURL(asset.SourceURL)
-	}
+	asset.SourceURL = SanitizeArchiveMetadataURL(asset.SourceURL)
 	asset.LocalPath = strings.TrimSpace(asset.LocalPath)
 	asset.SHA256 = strings.TrimSpace(asset.SHA256)
 	asset.Status = strings.TrimSpace(asset.Status)
@@ -499,10 +495,6 @@ func SanitizeCatalogRawMetadata(raw string) string {
 }
 
 func sanitizeCatalogMetadataValue(value interface{}) interface{} {
-	return sanitizeCatalogMetadataValueForKey(value, "")
-}
-
-func sanitizeCatalogMetadataValueForKey(value interface{}, key string) interface{} {
 	switch typed := value.(type) {
 	case map[string]interface{}:
 		cleaned := make(map[string]interface{}, len(typed))
@@ -510,33 +502,19 @@ func sanitizeCatalogMetadataValueForKey(value interface{}, key string) interface
 			if isSensitiveCatalogMetadataKey(key) {
 				continue
 			}
-			cleaned[key] = sanitizeCatalogMetadataValueForKey(child, key)
+			cleaned[key] = sanitizeCatalogMetadataValue(child)
 		}
 		return cleaned
 	case []interface{}:
 		cleaned := make([]interface{}, len(typed))
 		for i, child := range typed {
-			cleaned[i] = sanitizeCatalogMetadataValueForKey(child, key)
+			cleaned[i] = sanitizeCatalogMetadataValue(child)
 		}
 		return cleaned
 	case string:
-		if isCatalogMediaURLKey(key) {
-			return SanitizeCatalogMediaURL(typed)
-		}
 		return sanitizeCatalogMetadataString(typed)
 	default:
 		return value
-	}
-}
-
-func isCatalogMediaURLKey(key string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(key))
-	normalized = strings.ReplaceAll(normalized, "-", "_")
-	switch normalized {
-	case "play_url", "video_url", "media_url", "audio_url", "cover_url":
-		return true
-	default:
-		return false
 	}
 }
 
@@ -567,16 +545,6 @@ func articleMetadataForStorage(item ArticleItem) string {
 	item.SourceURL = SanitizeArchiveMetadataURL(item.SourceURL)
 	item.Cover = SanitizeArchiveMetadataURL(item.Cover)
 	item.PlayURL = SanitizeCatalogMediaURL(item.PlayURL)
-	if item.Media != nil {
-		media := make([]ArticleMedia, len(item.Media))
-		copy(media, item.Media)
-		for i := range media {
-			media[i].VideoID = strings.TrimSpace(media[i].VideoID)
-			media[i].PlayURL = SanitizeCatalogMediaURL(media[i].PlayURL)
-			media[i].CoverURL = SanitizeCatalogMediaURL(media[i].CoverURL)
-		}
-		item.Media = media
-	}
 	data, err := json.Marshal(item)
 	if err != nil || len(data) > maxCatalogRawMetadataBytes {
 		return ""

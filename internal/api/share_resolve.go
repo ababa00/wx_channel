@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"wx_channel/internal/response"
-	"wx_channel/internal/utils"
 	"wx_channel/internal/websocket"
 )
 
@@ -317,30 +316,20 @@ func firstMediaMap(v interface{}) map[string]interface{} {
 	if !ok || len(items) == 0 {
 		return nil
 	}
-	var first map[string]interface{}
-	for _, item := range items {
-		media, ok := item.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		if first == nil {
-			first = media
-		}
-		if buildPageMediaURL(media) != "" {
-			return media
-		}
-	}
-	return first
+	media, _ := items[0].(map[string]interface{})
+	return media
 }
 
 func buildPageMediaURL(media map[string]interface{}) string {
-	baseURL := stringValue(media["url"])
-	urlToken := firstNonEmptyString(
-		stringValue(media["urlToken"]),
-		stringValue(media["url_token"]),
-		stringValue(media["urltoken"]),
-	)
-	return utils.JoinURLToken(baseURL, urlToken)
+	baseURL := strings.TrimSpace(stringValue(media["url"]))
+	if baseURL == "" {
+		return ""
+	}
+	urlToken := strings.TrimSpace(stringValue(media["urlToken"]))
+	if urlToken == "" {
+		return baseURL
+	}
+	return baseURL + urlToken
 }
 
 func int64Value(v interface{}) int64 {

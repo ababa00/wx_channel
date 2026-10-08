@@ -695,9 +695,9 @@
 
                             <p class="text-blue-700 text-sm mt-2">
 
-                                <strong>当前版本：</strong>v5.7.11 |
+                                <strong>当前版本：</strong>v5.7.9 |
 
-                                <strong>更新时间：</strong>2026-10-06
+                                <strong>更新时间：</strong>2026-09-01
 
                             </p>
 
@@ -2082,29 +2082,29 @@ upx --best wx_channel.exe</code></pre>
 
                     <div class="space-y-6">
 
-                        <!-- v5.7.11版本 - 最新版本 -->
+                        <!-- v5.7.9版本 - 最新版本 -->
 
                         <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-lg p-4">
 
                             <div class="flex items-center mb-2">
 
-                                <span class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-1 rounded text-sm font-semibold">v5.7.11 最新版本</span>
+                                <span class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-1 rounded text-sm font-semibold">v5.7.9 最新版本</span>
 
-                                <span class="ml-2 text-xs text-gray-500">2026-10-06</span>
+                                <span class="ml-2 text-xs text-gray-500">2026-09-01</span>
 
                             </div>
 
                             <ul class="space-y-1 text-gray-700 text-sm">
 
-                                <li class="flex items-start"><span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-2 mt-2 flex-shrink-0"></span><strong>Gopeed 下载统一</strong>：单个原始视频和批量任务统一交由 Gopeed 后端处理。</li>
+                                <li class="flex items-start"><span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-2 mt-2 flex-shrink-0"></span><strong>长时间运行保活</strong>：增加应用层健康探测、心跳确认和断线重连，识别页面失活并自动恢复。</li>
 
-                                <li class="flex items-start"><span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-2 mt-2 flex-shrink-0"></span><strong>页面直连退役</strong>：原始视频不再通过微信页面 fetch 下载，降低直连超时和浏览器内存压力。</li>
+                                <li class="flex items-start"><span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-2 mt-2 flex-shrink-0"></span><strong>自动检查开关</strong>：标准版和 Radar 版默认关闭，Cloud 版默认开启，可通过 auto_open_channels 覆盖。</li>
 
-                                <li class="flex items-start"><span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-2 mt-2 flex-shrink-0"></span><strong>原始视频保护</strong>：继续使用单连接和源文件大小校验，拦截疑似低码率流。</li>
+                                <li class="flex items-start"><span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-2 mt-2 flex-shrink-0"></span><strong>长标题命名</strong>：移除固定 50 字符限制，按目标目录动态计算路径预算并保留视频 ID、画质和扩展名。</li>
 
-                                <li class="flex items-start"><span class="w-1.5 h-1.5 bg-blue-500 rounded-full mr-2 mt-2 flex-shrink-0"></span><strong>请求链路稳定</strong>：后端保留来源 Referer、Origin 和 User-Agent，使用完整请求上下文。</li>
+                                <li class="flex items-start"><span class="w-1.5 h-1.5 bg-blue-500 rounded-full mr-2 mt-2 flex-shrink-0"></span><strong>下载链路统一</strong>：批量、队列、分片和页面直连下载共用安全命名与重名规则，数据库保留完整标题。</li>
 
-                                <li class="flex items-start"><span class="w-1.5 h-1.5 bg-blue-500 rounded-full mr-2 mt-2 flex-shrink-0"></span><strong>下载结果一致</strong>：统一使用本地下载接口，进度、命名、落盘和历史记录保持一致。</li>
+                                <li class="flex items-start"><span class="w-1.5 h-1.5 bg-blue-500 rounded-full mr-2 mt-2 flex-shrink-0"></span><strong>公众号请求稳定性</strong>：推送列表读取前等待凭证刷新，降低首次 401 请求失败。</li>
 
                             </ul>
 

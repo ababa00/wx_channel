@@ -114,7 +114,7 @@ function getStatusText(status) {
 // UI Navigation
 // ============================================
 let currentPage = 'dashboard';
-const validPages = ['dashboard', 'browse', 'downloads', 'batch', 'official-accounts', 'queue', 'settings', 'help', 'radar'];
+const validPages = ['dashboard', 'browse', 'downloads', 'batch', 'official-accounts', 'queue', 'settings', 'help', 'radar', 'radar-videos'];
 const pageTitles = {
     dashboard: '仪表盘',
     browse: '浏览记录',
@@ -124,7 +124,8 @@ const pageTitles = {
     queue: '下载队列',
     settings: '设置',
     help: '帮助',
-    radar: '对标雷达'
+    radar: '对标雷达',
+    'radar-videos': '视频数据'
 };
 
 function navigateTo(page, updateHistory = true) {
@@ -237,6 +238,11 @@ async function loadPageData(page) {
                 break;
             case 'queue': await loadDownloadQueue(); break;
             case 'settings': await loadSettings(); break;
+            case 'radar-videos':
+                if (typeof loadRadarVideoTargets === 'function') await loadRadarVideoTargets();
+                if (typeof loadRadarCaptureConfig === 'function') await loadRadarCaptureConfig();
+                if (typeof loadRadarVideos === 'function') await loadRadarVideos();
+                break;
         }
     } catch (e) {
         console.error('Failed to load page data:', e);

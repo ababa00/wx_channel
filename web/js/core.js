@@ -271,6 +271,35 @@ const ApiClient = {
         return await response.json();
     },
 
+    // 真正启动一次下载。
+    // 注意：/queue 只是把任务写进队列表，AddToQueue 之后没有任何后台消费者
+    // 会去取（ChunkedDownloader 全项目从未被实例化），所以只入队的话任务会
+    // 永远停在 pending，下载记录不产生，前端轮询 /api/downloads/<id> 一直 404。
+    // 这个端点才是真正执行「下载 -> 解密 -> 落盘 -> 写下载记录」的入口。
+    async startVideoDownload(payload) {
+        if (ConnectionManager.getStatus() !== 'connected') {
+            throw new Error('Not connected to service');
+        }
+
+        const serviceUrl = ConnectionManager.getServiceUrl();
+        const options = {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        };
+        const token = getLocalAuthToken();
+        if (token) {
+            options.headers['X-Local-Auth'] = token;
+        }
+        options.body = JSON.stringify(payload);
+
+        const response = await fetch(`${serviceUrl}/__wx_channels_api/download_video`, options);
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+            throw new Error(error.message || error.error || `HTTP ${response.status}`);
+        }
+        return await response.json();
+    },
+
     // Browse History
     async getBrowseHistory(params = {}) {
         const query = new URLSearchParams(params).toString();
@@ -537,7 +566,12 @@ const WebSocketClient = {
     callbacks: {
         downloadProgress: [],
         queueChange: [],
-        statsUpdate: []
+        statsUpdate: [],
+        // 下载真正落盘完成/失败时触发，由后端 download_complete / download_failed
+        // 广播驱动。用它替代轮询：轮询是猜（每 2 秒问一次「好了没」），
+        // 这是服务端在结果产生的那一刻主动通知。
+        downloadComplete: [],
+        downloadFailed: []
     },
 
     connect() {
@@ -595,6 +629,16 @@ const WebSocketClient = {
     },
 
     handleMessage(message) {
+        // 畸形消息（null、非对象、缺 type）直接忽略，不能让解析异常冒出去
+        if (!message || typeof message !== 'object') return;
+
+        // 后端 BroadcastCommand 会把指令包成 { type: 'cmd', data: { action, payload } }。
+        // 直接 switch(message.type) 只会看到 'cmd'，里面的 action 全部匹配不上、
+        // 被静默丢弃 —— 这就是「下载完成后必须刷新页面才显示播放按钮」的原因。
+        if (message.type === 'cmd') {
+            this.handleCommand(message.data);
+            return;
+        }
         switch (message.type) {
             case 'download_progress':
                 this.callbacks.downloadProgress.forEach(cb => cb(message));
@@ -608,9 +652,40 @@ const WebSocketClient = {
         }
     },
 
+    // data 可能是对象，也可能是 JSON 字符串（后端用 json.Marshal 塞进 Data 字段）
+    handleCommand(data) {
+        let cmd = data;
+        if (typeof cmd === 'string') {
+            try {
+                cmd = JSON.parse(cmd);
+            } catch (e) {
+                return;
+            }
+        }
+        if (!cmd || !cmd.action) return;
+
+        const payload = cmd.payload || {};
+        switch (cmd.action) {
+            case 'download_progress':
+                this.callbacks.downloadProgress.forEach(cb => cb(payload));
+                break;
+            case 'download_complete':
+                this.callbacks.downloadComplete.forEach(cb => cb(payload));
+                break;
+            case 'download_failed':
+                this.callbacks.downloadFailed.forEach(cb => cb(payload));
+                break;
+            case 'queue_change':
+                this.callbacks.queueChange.forEach(cb => cb(payload));
+                break;
+        }
+    },
+
     onDownloadProgress(callback) { this.callbacks.downloadProgress.push(callback); },
     onQueueChange(callback) { this.callbacks.queueChange.push(callback); },
-    onStatsUpdate(callback) { this.callbacks.statsUpdate.push(callback); }
+    onStatsUpdate(callback) { this.callbacks.statsUpdate.push(callback); },
+    onDownloadComplete(callback) { this.callbacks.downloadComplete.push(callback); },
+    onDownloadFailed(callback) { this.callbacks.downloadFailed.push(callback); }
 };
 
 console.log('Core module loaded');
