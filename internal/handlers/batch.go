@@ -777,11 +777,10 @@ func (h *BatchHandler) downloadVideoOnce(ctx context.Context, task *BatchTask, d
 		return "", fmt.Errorf("下载文件无效")
 	}
 
-	if err := validateOriginalDownloadSize(mode, task.Size, stat.Size()); err != nil {
-		h.cleanupTaskArtifacts(task.GopeedTaskID, actualPath, true)
-		task.GopeedTaskID = ""
-		task.TempPath = ""
-		return "", err
+	// 只提示不阻断：feed 标注的是作者上传的原始大小，CDN 给的是微信转码画质。
+	// 这里曾经直接判失败，导致批量下载全军覆没（实测 completed 记录为 0）。
+	if note := describeSizeDeviation(mode, task.Size, stat.Size()); note != "" {
+		utils.Warn("[批量下载] %s | %s", note, task.Title)
 	}
 
 	// 解密逻辑（如果需要）

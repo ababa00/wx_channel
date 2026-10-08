@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -230,7 +231,7 @@ func TestDownloadConnectionCountFromMode(t *testing.T) {
 	}
 }
 
-func TestValidateOriginalDownloadSize(t *testing.T) {
+func TestDescribeSizeDeviation(t *testing.T) {
 	t.Parallel()
 
 	const megabyte = int64(1024 * 1024)
@@ -239,36 +240,50 @@ func TestValidateOriginalDownloadSize(t *testing.T) {
 		mode         downloadVideoMode
 		expectedSize int64
 		actualSize   int64
-		wantErr      bool
+		wantNote     bool
 	}{
 		{
-			name:         "rejects a lower-quality rendition",
+			name:         "notes the reported 362 MB to 39 MB shrink",
 			mode:         downloadVideoModeOriginal,
 			expectedSize: 362 * megabyte,
 			actualSize:   39 * megabyte,
-			wantErr:      true,
+			wantNote:     true,
 		},
 		{
-			name:         "rejects the reported 4.26 MB to 0.25 MB shrink",
+			name:         "notes the reported 4.26 MB to 0.25 MB shrink",
 			mode:         downloadVideoModeOriginal,
 			expectedSize: 4*megabyte + 26*megabyte/100,
 			actualSize:   25 * megabyte / 100,
-			wantErr:      true,
+			wantNote:     true,
 		},
 		{
-			name:         "allows an approximate source-size hint",
+			// 真实抓到的这条：feed 3.45 MB，CDN 给 0.74 MB，解密后完全可播放
+			name:         "notes the real-world 21.5% rendition we measured",
+			mode:         downloadVideoModeOriginal,
+			expectedSize: 3614995,
+			actualSize:   775859,
+			wantNote:     true,
+		},
+		{
+			name:         "silent when the hint is close",
 			mode:         downloadVideoModeOriginal,
 			expectedSize: 362 * megabyte,
 			actualSize:   300 * megabyte,
 		},
 		{
-			name:         "does not apply to a specific rendition",
+			name:         "silent when the file is larger than the hint",
+			mode:         downloadVideoModeOriginal,
+			expectedSize: 10 * megabyte,
+			actualSize:   39 * megabyte,
+		},
+		{
+			name:         "silent for a specific rendition",
 			mode:         downloadVideoModeSpecific,
 			expectedSize: 362 * megabyte,
 			actualSize:   39 * megabyte,
 		},
 		{
-			name:         "does not apply without a source-size hint",
+			name:         "silent without a source-size hint",
 			mode:         downloadVideoModeOriginal,
 			expectedSize: 0,
 			actualSize:   39 * megabyte,
@@ -279,9 +294,13 @@ func TestValidateOriginalDownloadSize(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := validateOriginalDownloadSize(tt.mode, tt.expectedSize, tt.actualSize)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("validateOriginalDownloadSize() error = %v, wantErr %v", err, tt.wantErr)
+			note := describeSizeDeviation(tt.mode, tt.expectedSize, tt.actualSize)
+			if got := note != ""; got != tt.wantNote {
+				t.Fatalf("describeSizeDeviation() note = %q, wantNote %v", note, tt.wantNote)
+			}
+			// 关键回归：任何情况下都不得再出现阻断下载的错误
+			if note != "" && strings.Contains(note, "低码率流") {
+				t.Errorf("提示文案不应再宣称下载失败: %q", note)
 			}
 		})
 	}

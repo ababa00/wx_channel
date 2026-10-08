@@ -163,6 +163,111 @@ func ResolveDownloadConnections(mode downloadVideoMode, base int) int {
 	return base
 }
 
+// consoleHubProvider 返回控制台页面所在的 WebSocket Hub。
+//
+// 做成变量是为了测试可以替换成隔离实例：真实的 GetWebSocketHub() 单例会
+// 额外启动一个每 5 秒查数据库的统计广播 goroutine，在测试环境里会和
+// database.Close() 相撞。生产环境恒为 GetWebSocketHub()。
+var consoleHubProvider = func() *WebSocketHub {
+	return GetWebSocketHub()
+}
+
+// broadcastDownloadEvent 把下载事件同时投递到两个 WebSocket Hub。
+//
+// 项目里存在两套互不相通的 Hub，这是「下载完成后必须刷新页面才显示播放按钮」
+// 的根因：
+//
+//   - handlers.WebSocketHub（GetWebSocketHub() 单例）—— /ws 端点注册的
+//     控制台页面客户端连在这里，只收到队列和统计广播。
+//   - websocket.Hub（app.WSHub）—— SunnyNet 注入的微信页面客户端注册在这里，
+//     下载事件的广播原本只发到这里。
+//
+// 所以下载完成的广播发给了微信页面，而用户盯着的控制台页面收不到，只能靠刷新
+// 重新拉取。这里做双投递，两个信封格式本来就一致（都是
+// {type:"cmd", data:{action, payload}}），无需转换。
+//
+// 任一 Hub 不可用都不影响另一个，也不影响下载本身。
+func (h *UploadHandler) broadcastDownloadEvent(action string, payload map[string]interface{}) {
+	if h.wsHub != nil {
+		_ = h.wsHub.BroadcastCommand(action, payload)
+	}
+	// 控制台页面所在的那套 Hub
+	if hub := consoleHubProvider(); hub != nil {
+		_ = hub.BroadcastCommand(action, payload)
+	}
+}
+
+// recordFailedDownload 把一次失败的下载落成 status=failed 的记录。
+//
+// 为什么失败也要落记录：前端在下载启动后会轮询 /api/downloads/<videoId> 等结果
+// （见 pages-radar-videos.js / pages-browse.js 的共享轮询器）。如果后端失败时
+// 什么都不写，这个 ID 就永远不会出现记录，前端只能每 2 秒拿到 404 空转到超时
+// ——实测某个失败任务被打了 283 次 404，全日志 1452 次单条查询里 93.5% 是 404。
+// 落一条 failed 记录，轮询立刻收尾，用户也能在「下载记录」里看到失败原因。
+func (h *UploadHandler) recordFailedDownload(req DownloadVideoRequest, reason string) {
+	if h.downloadService == nil {
+		return
+	}
+	// 没有 videoId 就无法被轮询，落记录也没有意义（且 id 为空会撞主键）
+	if strings.TrimSpace(req.VideoID) == "" {
+		return
+	}
+
+	record := &database.DownloadRecord{
+		ID:           req.VideoID,
+		VideoID:      req.VideoID,
+		Title:        req.Title,
+		Author:       req.Author,
+		FilePath:     "",
+		Format:       "mp4",
+		Resolution:   req.Resolution,
+		Status:       database.DownloadStatusFailed,
+		DownloadTime: time.Now(),
+		ErrorMessage: reason,
+		LikeCount:    req.LikeCount,
+		CommentCount: req.CommentCount,
+		ForwardCount: req.ForwardCount,
+		FavCount:     req.FavCount,
+	}
+	if err := h.downloadService.Create(record); err != nil {
+		utils.Error("保存失败下载记录失败: %v", err)
+	}
+}
+
+// probeVideoURL 用 1 字节的 Range 请求探活签名链接是否还有效。
+// 只关心状态码：403/410 说明签名过期，404 说明资源已下架，416 说明签名可用但
+// 范围非法（仍属可用）。网络层错误直接返回 err，调用方据此放行而不阻断。
+func probeVideoURL(ctx context.Context, videoURL string) (int, error) {
+	if strings.TrimSpace(videoURL) == "" {
+		return 0, fmt.Errorf("empty url")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, videoURL, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Range", "bytes=0-0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("Referer", "https://channels.weixin.qq.com/")
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode, nil
+}
+
+// isExpiredVideoURLStatus 判断状态码是否代表链接已不可用。
+// 410/404 明确失效；403 在微信签名链接上就是过期。
+func isExpiredVideoURLStatus(status int) bool {
+	switch status {
+	case http.StatusForbidden, http.StatusGone, http.StatusNotFound:
+		return true
+	}
+	return false
+}
+
 func downloadModeFromRequest(req DownloadVideoRequest) downloadVideoMode {
 	_, mode := NormalizeDownloadURL(req.VideoURL, req.FileFormat)
 	return mode
@@ -177,18 +282,22 @@ func downloadConnectionCountFromMode(base int, mode downloadVideoMode) int {
 	return ResolveDownloadConnections(mode, base)
 }
 
-// validateOriginalDownloadSize rejects a lower-quality rendition returned for
-// an original-video request. The source hint is approximate, so the same 80%
-// tolerance used by the page-session downloader is intentional.
-func validateOriginalDownloadSize(mode downloadVideoMode, expectedSize, actualSize int64) error {
+// describeSizeDeviation 描述实际落盘大小与 feed 大小提示之间的偏差，
+// 返回空串表示无明显偏差。
+//
+// 注意这里刻意只返回提示、不返回 error：feed 里的 fileSize 是作者上传的
+// 原始大小，而 CDN 针对该签名 URL 提供的是微信转码后的画质，两者本来就不
+// 相等（实测同一条视频 feed 标注 3.45 MB，CDN 只给 0.74 MB，且文件结构完整）。
+// 拿它做硬性校验会让每一次下载都失败。
+func describeSizeDeviation(mode downloadVideoMode, expectedSize, actualSize int64) string {
 	if mode != downloadVideoModeOriginal || expectedSize <= 0 || actualSize <= 0 {
-		return nil
+		return ""
 	}
 	if actualSize < expectedSize && expectedSize-actualSize > expectedSize/5 {
-		return fmt.Errorf("原始视频疑似低码率流: 期望 %.2f MB，实际 %.2f MB",
-			float64(expectedSize)/(1024*1024), float64(actualSize)/(1024*1024))
+		return fmt.Sprintf("实际 %.2f MB 明显小于 feed 标注的 %.2f MB，微信只提供了转码画质（文件完整）",
+			float64(actualSize)/(1024*1024), float64(expectedSize)/(1024*1024))
 	}
-	return nil
+	return ""
 }
 
 func (h *UploadHandler) downloadWithHeaders(ctx context.Context, url, targetPath string, headers map[string]string, onProgress func(progress float64, downloaded int64, total int64)) error {
@@ -1541,17 +1650,11 @@ func (h *UploadHandler) HandleDownloadVideo(Conn *SunnyNet.HttpConn) bool {
 			return
 		}
 
-		if err := validateOriginalDownloadSize(mode, req.ExpectedSize, stat.Size()); err != nil {
-			utils.Error("❌ [视频下载] 下载大小校验失败: %v", err)
-			_ = os.Remove(actualPath)
-			if h.wsHub != nil {
-				h.wsHub.BroadcastCommand("download_failed", map[string]interface{}{
-					"videoId": req.VideoID,
-					"title":   req.Title,
-					"error":   err.Error(),
-				})
-			}
-			return
+		// 只提示不阻断：feed 标注的是作者上传的原始大小，CDN 给的是微信转码画质，
+		// 两者本来就不相等。这里曾经直接判失败并删除文件，导致每次下载都失败。
+		// 只写日志，不落 error_message —— 否则控制台会在一条成功的记录上挂 ⚠ 徽章。
+		if note := describeSizeDeviation(mode, req.ExpectedSize, stat.Size()); note != "" {
+			utils.Warn("[视频下载] %s", note)
 		}
 
 		if needDecrypt {
