@@ -461,22 +461,89 @@ async function downloadBrowseRecord(id) {
         return;
     }
 
+    const payload = buildBrowseDownloadPayload(record);
+
+    // 先入队，让下载队列页能看到这条任务
     try {
-        await ApiClient.addToQueue([{
-            videoId: record.id,
-            videoUrl: record.videoUrl,
-            decryptKey: record.decryptKey || '',
-            coverUrl: record.coverUrl || '',
-            duration: record.duration || 0,
-            resolution: record.resolution || parseResolutionFromUrl(record.videoUrl) || '',
-            title: record.title,
-            author: record.author,
-            size: record.size || 0
-        }]);
-        showMessage('已添加到下载队列', 'success');
+        await ApiClient.addToQueue([payload]);
     } catch (e) {
-        showMessage('添加失败: ' + e.message, 'error');
+        showMessage('入队失败: ' + e.message, 'error');
+        return;
     }
+
+    // 再真正触发下载。只入队的话没人消费，任务会卡在 pending，
+    // 下载记录不会产生，轮询 /api/downloads/<id> 会一直 404。
+    try {
+        await ApiClient.startVideoDownload({
+            videoId: payload.videoId,
+            videoUrl: payload.videoUrl,
+            key: payload.decryptKey || '',
+            title: payload.title,
+            author: payload.author,
+            expectedSize: payload.size || 0,
+            duration: payload.duration || 0,
+            resolution: payload.resolution || '',
+            fileFormat: '',
+            forceSave: true
+        });
+        showMessage('已开始下载，完成后会在「下载记录」中出现', 'success');
+        trackBrowseDownload(payload.videoId);
+    } catch (e) {
+        showMessage('下载启动失败: ' + e.message, 'error');
+    }
+}
+
+// 把浏览记录映射成下载载荷
+function buildBrowseDownloadPayload(record) {
+    return {
+        videoId: record.id,
+        videoUrl: record.videoUrl,
+        decryptKey: record.decryptKey || '',
+        coverUrl: record.coverUrl || '',
+        duration: record.duration || 0,
+        resolution: record.resolution || parseResolutionFromUrl(record.videoUrl) || '',
+        title: record.title,
+        author: record.author,
+        size: record.size || 0
+    };
+}
+
+// 下载进度跟踪改为事件驱动，不再轮询。
+//
+// 旧实现每 2 秒打三个请求（单条 + 列表 + 队列）去猜「好了没」；后端落盘时
+// 本来就会广播 download_complete / download_failed，直接监听即可，请求数归零。
+// 之前的轮询还留下过一个更严重的坑：批量下载时每个视频各起一个递归
+// setTimeout，收尾那一帧触发 2N 次全量列表重建，批量 47 个直接卡死页面。
+//
+// 这里只保留「在等哪些下载」的集合，用于判断是否需要在页面上提示。
+const browseDownloadWatch = new Map();
+
+function trackBrowseDownload(videoId) {
+    if (!videoId) return;
+    browseDownloadWatch.set(videoId, Date.now());
+}
+
+// 后端广播落盘结果
+function onBrowseDownloadSettled(payload, ok) {
+    if (!payload) return;
+    const id = payload.videoId;
+    if (id && browseDownloadWatch.has(id)) {
+        browseDownloadWatch.delete(id);
+    }
+
+    if (currentPage === 'browse' || currentPage === 'downloads') {
+        if (typeof loadDownloadRecords === 'function') loadDownloadRecords();
+        if (typeof loadDownloadQueue === 'function') loadDownloadQueue();
+        showMessage(
+            ok ? `下载完成：${payload.title || ''}` : `下载失败：${payload.title || ''}`,
+            ok ? 'success' : 'error'
+        );
+    }
+}
+
+if (typeof WebSocketClient !== 'undefined' && WebSocketClient.onDownloadComplete) {
+    WebSocketClient.onDownloadComplete((payload) => onBrowseDownloadSettled(payload, true));
+    WebSocketClient.onDownloadFailed((payload) => onBrowseDownloadSettled(payload, false));
 }
 
 // Parse resolution from video URL (e.g., 1280x720 -> 720p)
@@ -526,25 +593,46 @@ async function downloadSelectedBrowse() {
     }
 
     const selectedRecords = browseState.records.filter(r => browseState.selectedIds.has(r.id));
-    const videos = selectedRecords.map(r => ({
-        videoId: r.id,
-        videoUrl: r.videoUrl,
-        decryptKey: r.decryptKey || '',
-        coverUrl: r.coverUrl || '',
-        duration: r.duration || 0,
-        resolution: r.resolution || parseResolutionFromUrl(r.videoUrl) || '',
-        title: r.title,
-        author: r.author,
-        size: r.size || 0
-    }));
+    const videos = selectedRecords.map(buildBrowseDownloadPayload);
 
+    // 先入队，让下载队列页能看到这些任务
     try {
         await ApiClient.addToQueue(videos);
-        showMessage(`已将 ${videos.length} 个视频添加到下载队列`, 'success');
-        clearBrowseSelection();
     } catch (e) {
-        showMessage('添加失败: ' + e.message, 'error');
+        showMessage('入队失败: ' + e.message, 'error');
+        return;
     }
+
+    // 再逐个真正触发下载。只入队不会有人消费
+    let started = 0;
+    const failed = [];
+    for (const v of videos) {
+        try {
+            await ApiClient.startVideoDownload({
+                videoId: v.videoId,
+                videoUrl: v.videoUrl,
+                key: v.decryptKey || '',
+                title: v.title,
+                author: v.author,
+                expectedSize: v.size || 0,
+                duration: v.duration || 0,
+                resolution: v.resolution || '',
+                fileFormat: '',
+                forceSave: true
+            });
+            started++;
+            trackBrowseDownload(v.videoId);
+        } catch (e) {
+            failed.push(v.title);
+        }
+    }
+
+    let msg = `已启动 ${started}/${videos.length} 个下载`;
+    if (failed.length) {
+        msg += `，${failed.length} 个启动失败`;
+    }
+    showMessage(msg, failed.length ? 'error' : 'success');
+    clearBrowseSelection();
 }
 
 // ============================================

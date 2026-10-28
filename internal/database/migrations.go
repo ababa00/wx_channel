@@ -518,6 +518,76 @@ ALTER TABLE mp_articles ADD COLUMN malicious_content_type INTEGER NOT NULL DEFAU
 ALTER TABLE mp_articles ADD COLUMN video_id TEXT NOT NULL DEFAULT '';
 `,
 	},
+	{
+		Version:     21,
+		Description: "Create radar_videos table for per-video radar capture",
+		Up: `
+-- One row per video observed by the radar, across every monitor target.
+-- The row is upserted on each poll so interaction counters stay current while
+-- first_seen_at preserves the discovery order used by the console tab.
+CREATE TABLE IF NOT EXISTS radar_videos (
+    id TEXT PRIMARY KEY,
+    video_id TEXT NOT NULL,
+    target_id TEXT NOT NULL DEFAULT '',
+    username TEXT NOT NULL DEFAULT '',
+    author_name TEXT NOT NULL DEFAULT '',
+    author_avatar TEXT NOT NULL DEFAULT '',
+    nonce_id TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL DEFAULT '',
+    media_type INTEGER NOT NULL DEFAULT 0,
+    createtime INTEGER NOT NULL DEFAULT 0,
+    cover_url TEXT NOT NULL DEFAULT '',
+    thumb_url TEXT NOT NULL DEFAULT '',
+    video_url TEXT NOT NULL DEFAULT '',
+    decrypt_key TEXT NOT NULL DEFAULT '',
+    file_size INTEGER NOT NULL DEFAULT 0,
+    duration INTEGER NOT NULL DEFAULT 0,
+    resolution TEXT NOT NULL DEFAULT '',
+    file_format TEXT NOT NULL DEFAULT '',
+    read_count INTEGER NOT NULL DEFAULT 0,
+    like_count INTEGER NOT NULL DEFAULT 0,
+    comment_count INTEGER NOT NULL DEFAULT 0,
+    fav_count INTEGER NOT NULL DEFAULT 0,
+    forward_count INTEGER NOT NULL DEFAULT 0,
+    ip_region TEXT NOT NULL DEFAULT '',
+    page_url TEXT NOT NULL DEFAULT '',
+    is_new INTEGER NOT NULL DEFAULT 1,
+    raw TEXT NOT NULL DEFAULT '',
+    first_seen_at DATETIME,
+    last_seen_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- A video belongs to exactly one author, so video_id alone identifies it and
+-- gives the upsert a conflict target.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_radar_videos_video_id ON radar_videos(video_id);
+CREATE INDEX IF NOT EXISTS idx_radar_videos_target_id ON radar_videos(target_id);
+CREATE INDEX IF NOT EXISTS idx_radar_videos_createtime ON radar_videos(createtime);
+CREATE INDEX IF NOT EXISTS idx_radar_videos_first_seen ON radar_videos(first_seen_at);
+`,
+	},
+	{
+		Version:     22,
+		Description: "Normalize NULL text columns in browse_history",
+		Up: `
+-- browse_history 的 author_id / cover_url / video_url / decrypt_key / page_url
+-- 都是 ALTER TABLE 后期加的，没有 DEFAULT，任何漏掉该字段的 INSERT 都会留下 NULL。
+-- 读取时扫进 string 会直接报
+--   converting NULL to string is unsupported
+-- 让整个浏览记录页 500。读取侧已改成 COALESCE，这里把存量 NULL 归零，
+-- 避免导出/搜索/清理等其它路径再踩到。
+UPDATE browse_history SET author_id  = '' WHERE author_id  IS NULL;
+UPDATE browse_history SET cover_url  = '' WHERE cover_url  IS NULL;
+UPDATE browse_history SET video_url  = '' WHERE video_url  IS NULL;
+UPDATE browse_history SET decrypt_key = '' WHERE decrypt_key IS NULL;
+UPDATE browse_history SET page_url   = '' WHERE page_url   IS NULL;
+UPDATE browse_history SET resolution = '' WHERE resolution IS NULL;
+UPDATE browse_history SET file_format = '' WHERE file_format IS NULL;
+UPDATE browse_history SET title = '' WHERE title IS NULL;
+UPDATE browse_history SET author = '' WHERE author IS NULL;
+`,
+	},
 }
 
 // runMigrations 执行所有待处理的迁移

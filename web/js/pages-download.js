@@ -126,7 +126,7 @@ function renderDownloadTable() {
                     <div class="video-info-cell">
                         <div class="table-title" title="${escapeHtml(record.title || '无标题')}">${escapeHtml(record.title || '无标题')}</div>
                         ${metaItems.length > 0 ? `<div class="video-meta-row">${metaItems.join('')}</div>` : ''}
-                        ${record.errorMessage ? `<div class="table-error-hint" title="${escapeHtml(record.errorMessage)}">⚠ ${escapeHtml(record.errorMessage.substring(0, 30))}${record.errorMessage.length > 30 ? '...' : ''}</div>` : ''}
+                        ${record.errorMessage ? `<div class="table-error-hint" title="${escapeHtml(record.errorMessage)}">${escapeHtml(record.errorMessage.substring(0, 30))}${record.errorMessage.length > 30 ? '...' : ''}</div>` : ''}
                     </div>
                 </td>
                 <td onclick="showDownloadDetail('${escapeHtml(record.id)}')">

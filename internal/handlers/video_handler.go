@@ -305,6 +305,24 @@ func (h *APIHandler) processVideoData(data map[string]interface{}) {
 	color.Yellow("\n\n")
 }
 
+// resolveBrowseDecryptKey 决定更新浏览记录时该写入哪个解密密钥。
+//
+// 密钥与签名 URL 是一一对应的：微信每次抓取都会同时换掉 video_url 和 decodeKey，
+// 而更新路径每次都会用新的 video_url 覆盖旧值。所以这里绝不能沿用旧密钥——
+// 那样 URL 与密钥就错配了，下载能下满 100% 但解密必然失败，报
+// "decrypted header validation failed: header does not look like a valid media stream"。
+//
+// 2026-09-26 实测：video_url 是 19:18:52 抓的那条（token=ic1n0xDG6aw9，
+// 对应 Key=740903373），decrypt_key 却停在 18:59:54 的旧值 1040564494，
+// 1.59MB 下完后解密直接失败。
+//
+// 唯一沿用旧值的场景是本次没抓到 key，此时至少别把已有密钥抹成空。
+func resolveBrowseDecryptKey(record, existing *database.BrowseRecord) {
+	if record.DecryptKey == "" {
+		record.DecryptKey = existing.DecryptKey
+	}
+}
+
 // saveBrowseRecord 保存浏览记录到数据库
 func (h *APIHandler) saveBrowseRecord(videoID, title, author, authorID string, duration, size int64, coverUrl, videoUrl, decryptKey, resolution, fileFormat string, likeCount, commentCount, favCount, forwardCount int64, pageUrl string) {
 	// 检查数据库是否已初始化
@@ -353,13 +371,8 @@ func (h *APIHandler) saveBrowseRecord(videoID, title, author, authorID string, d
 	if existing != nil {
 		// 更新现有记录
 		record.CreatedAt = existing.CreatedAt
-		// 如果现有记录没有解密密钥但新数据有，则更新
-		if existing.DecryptKey == "" && decryptKey != "" {
-			record.DecryptKey = decryptKey
-		} else if existing.DecryptKey != "" {
-			// 保留现有的解密密钥
-			record.DecryptKey = existing.DecryptKey
-		}
+		// 密钥必须与本次写入的 URL 配套，见 resolveBrowseDecryptKey。
+		resolveBrowseDecryptKey(record, existing)
 		err = repo.Update(record)
 		if err != nil {
 			utils.Warn("更新浏览记录失败: %v", err)

@@ -2134,7 +2134,7 @@
                     <td onclick="showDownloadDetail('${escapeHtml(record.id)}')">${thumbnail}</td>
                     <td onclick="showDownloadDetail('${escapeHtml(record.id)}')">
                         <div class="table-title" title="${escapeHtml(record.title || '无标题')}">${escapeHtml(record.title || '无标题')}</div>
-                        ${record.errorMessage ? `<div class="table-error-hint" title="${escapeHtml(record.errorMessage)}">⚠ ${escapeHtml(record.errorMessage.substring(0, 30))}${record.errorMessage.length > 30 ? '...' : ''}</div>` : ''}
+                        ${record.errorMessage ? `<div class="table-error-hint" title="${escapeHtml(record.errorMessage)}">${escapeHtml(record.errorMessage.substring(0, 30))}${record.errorMessage.length > 30 ? '...' : ''}</div>` : ''}
                     </td>
                     <td onclick="showDownloadDetail('${escapeHtml(record.id)}')">
                         <span class="table-author">${escapeHtml(record.author || '未知')}</span>

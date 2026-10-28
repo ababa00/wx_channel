@@ -467,8 +467,18 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 	go client.readPump()
 
 	// 向新客户端发送初始统计更新
+	//
+	// 必须监听 client.ctx：连接可能在 100ms 延迟期间就断开（测试里尤其常见），
+	// 此时 client.send 已关闭、全局数据库可能也已关闭。旧实现不做检查，直接在
+	// 已断开的连接上查统计，会撞上已置空的全局 DB 变成 nil 指针 panic：
+	//   BrowseHistoryRepository.Count -> database/sql.(*DB).conn(0x0) panic
 	go func() {
-		time.Sleep(100 * time.Millisecond) // 小延迟以确保客户端准备就绪
+		select {
+		case <-time.After(100 * time.Millisecond): // 小延迟以确保客户端准备就绪
+		case <-client.ctx.Done():
+			return
+		}
+
 		stats, err := h.hub.statsService.GetStatistics()
 		if err == nil {
 			msg := StatsUpdateMessage{
@@ -478,6 +488,8 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 			if data, err := json.Marshal(msg); err == nil {
 				select {
 				case client.send <- data:
+				case <-client.ctx.Done():
+					return
 				default:
 				}
 			}
@@ -494,6 +506,8 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 			if data, err := json.Marshal(msg); err == nil {
 				select {
 				case client.send <- data:
+				case <-client.ctx.Done():
+					return
 				default:
 				}
 			}
