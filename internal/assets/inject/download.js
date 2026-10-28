@@ -176,10 +176,15 @@ function __wx_channels_validate_original_video_size__(expectedSize, actualSize) 
 
   __wx_log({ msg: '📏 原始视频大小校验<期望=' + expectedLabel + ' 实际=' + actualLabel + '>' });
 
-  // A source-size hint is approximate, but a stream below 80% is a clear
-  // signal that the CDN returned a lower-quality rendition.
+  // 这里只提示，不再抛错。
+  // feed 里的 fileSize 是作者上传的原始文件大小，而 CDN 针对该签名 URL
+  // 提供的是微信转码后的画质，两者本来就不相等：实测同一条视频 feed 标注
+  // 3.45 MB，CDN 实际只给 0.74 MB，解密后 box 结构完整、总长与
+  // Content-Length 精确一致，是一份完全可播放的文件。
+  // 拿它做硬性校验会让每一次下载都失败，用户什么也拿不到。
+  // 传输完整性由 Content-Length 保证，文件有效性由 MP4 头校验兜底。
   if (expected > 0 && actual > 0 && actual < expected * 0.8) {
-    throw new Error('页面直连返回疑似低码率流: 期望 ' + expectedLabel + '，实际 ' + actualLabel);
+    __wx_log({ msg: '实际 ' + actualLabel + ' 明显小于 feed 标注的 ' + expectedLabel + '，微信只提供了转码画质（文件完整）' });
   }
 }
 

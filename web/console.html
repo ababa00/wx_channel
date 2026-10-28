@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>视频号下载控制台</title>
     <link rel="icon" type="image/png" href="icon.png">
-    <link rel="stylesheet" href="css/app.css?v=20260827">
+    <link rel="stylesheet" href="css/app.css?v=20260929">
 </head>
 
 <body>
@@ -94,6 +94,17 @@
                             <circle cx="12" cy="11" r="3" />
                         </svg>
                         <span>对标雷达</span>
+                    </a>
+                    <a class="nav-item" data-page="radar-videos" onclick="navigateTo('radar-videos')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                            <line x1="8" y1="21" x2="16" y2="21" />
+                            <line x1="12" y1="17" x2="12" y2="21" />
+                            <line x1="6" y1="8" x2="6" y2="12" />
+                            <line x1="10" y1="6" x2="10" y2="12" />
+                            <line x1="14" y1="9" x2="14" y2="12" />
+                        </svg>
+                        <span>视频数据</span>
                     </a>
                 </div>
 
@@ -1413,6 +1424,241 @@
                 </div>
             </div>
 
+            <!-- Radar Videos Page -->
+            <div class="page-view" id="page-radar-videos">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">采集汇总</h3>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-secondary" onclick="exportRadarVideosCSV()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    style="width: 16px; height: 16px;">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7 10 12 15 17 10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                                导出 CSV
+                            </button>
+                            <button class="btn btn-danger" onclick="clearRadarVideos()"
+                                style="padding: 6px 12px; font-size: 13px;">清空数据</button>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;">
+                        <div class="stat-card">
+                            <div class="stat-label">视频总数</div>
+                            <div class="stat-value" id="radarStatTotal">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">新发现</div>
+                            <div class="stat-value" id="radarStatNew">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">监控账号</div>
+                            <div class="stat-value" id="radarStatAuthors">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">累计播放</div>
+                            <div class="stat-value" id="radarStatPlays">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">累计点赞</div>
+                            <div class="stat-value" id="radarStatLikes">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">最后采集</div>
+                            <div class="stat-value" id="radarStatUpdated" style="font-size: 15px;">—</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">采集设置</h3>
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: center;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="radarAutoDownload">
+                            <span>发现新视频时自动下载</span>
+                        </label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="color: var(--text-secondary);">每次最多翻页</span>
+                            <select id="radarMaxPages" class="filter-btn" style="cursor: pointer;">
+                                <option value="1">1 页</option>
+                                <option value="3">3 页</option>
+                                <option value="5">5 页</option>
+                                <option value="10">10 页</option>
+                                <option value="20">20 页</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="saveRadarCaptureConfig()">保存</button>
+                        <button class="btn btn-secondary" id="radarSyncNowBtn" onclick="syncRadarVideosNow()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                style="width: 14px; height: 14px;">
+                                <polyline points="23 4 23 10 17 10" />
+                                <polyline points="1 20 1 14 7 14" />
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                            </svg>
+                            <span id="radarSyncNowText">立即同步</span>
+                        </button>
+                    </div>
+                    <div class="alert alert-info" style="margin-top: 16px;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            style="width: 20px; height: 20px; flex-shrink: 0;">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="16" x2="12" y2="12" />
+                            <line x1="12" y1="8" x2="12.01" y2="8" />
+                        </svg>
+                        <span>默认关闭自动下载：雷达只采集视频数据，不会在本地生成视频文件。翻页数越大覆盖的历史视频越多，但单次轮询耗时也越长。</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">视频数据</h3>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <select id="radarVideoTargetFilter" onchange="filterRadarVideosByTarget(this.value)"
+                                class="filter-btn" style="cursor: pointer;">
+                                <option value="">全部监控账号</option>
+                            </select>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" onchange="toggleRadarOnlyNew(this.checked)">
+                                <span>仅看新发现</span>
+                            </label>
+                            <select id="radarVideoSort" onchange="sortRadarVideos(this.value)" class="filter-btn"
+                                style="cursor: pointer;">
+                                <option value="first_seen_at:desc">默认：最近发现</option>
+                                <option value="like_count:desc">点赞数 从多到少</option>
+                                <option value="like_count:asc">点赞数 从少到多</option>
+                                <option value="fav_count:desc">收藏数 从多到少</option>
+                                <option value="fav_count:asc">收藏数 从少到多</option>
+                                <option value="forward_count:desc">转发数 从多到少</option>
+                                <option value="forward_count:asc">转发数 从少到多</option>
+                                <option value="comment_count:desc">评论数 从多到少</option>
+                                <option value="comment_count:asc">评论数 从少到多</option>
+                                <option value="read_count:desc">播放数 从多到少</option>
+                                <option value="read_count:asc">播放数 从少到多</option>
+                                <option value="createtime:desc">发布时间 最新在前</option>
+                                <option value="createtime:asc">发布时间 最早在前</option>
+                            </select>
+                            <div class="global-search" style="width: 200px;">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="11" cy="11" r="8" />
+                                    <path d="m21 21-4.35-4.35" />
+                                </svg>
+                                <input type="text" placeholder="搜索标题或作者..."
+                                    oninput="handleRadarVideoSearch(this.value)">
+                            </div>
+                            <select onchange="changeRadarVideosPageSize(this.value)" class="filter-btn"
+                                style="cursor: pointer;">
+                                <option value="20">20条/页</option>
+                                <option value="50">50条/页</option>
+                                <option value="100">100条/页</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 发布时间区间筛选：点击弹出双月面板，点起点再点终点 -->
+                    <div class="radar-date-range">
+                        <span class="radar-date-range-label">发布时间</span>
+
+                        <div class="radar-date-trigger" id="radarDateTrigger" role="button" tabindex="0"
+                            onclick="toggleRadarDatePicker(event)" onkeydown="onRadarDateTriggerKeydown(event)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                <line x1="16" y1="2" x2="16" y2="6" />
+                                <line x1="8" y1="2" x2="8" y2="6" />
+                                <line x1="3" y1="10" x2="21" y2="10" />
+                            </svg>
+                            <span id="radarDateStartText" class="radar-date-trigger-text is-placeholder">开始日期</span>
+                            <span class="radar-date-range-sep">—</span>
+                            <span id="radarDateEndText" class="radar-date-trigger-text is-placeholder">结束日期</span>
+                            <span id="radarDateClearIcon" class="radar-date-trigger-clear" title="清除"
+                                onclick="clearRadarDateRange(event)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <line x1="15" y1="9" x2="9" y2="15" />
+                                    <line x1="9" y1="9" x2="15" y2="15" />
+                                </svg>
+                            </span>
+                        </div>
+
+                        <!-- 常用区间快捷按钮 -->
+                        <div class="radar-date-presets">
+                            <button type="button" class="radar-date-preset"
+                                onclick="setRadarDatePreset(7)">近 7 天</button>
+                            <button type="button" class="radar-date-preset"
+                                onclick="setRadarDatePreset(30)">近 30 天</button>
+                            <button type="button" class="radar-date-preset"
+                                onclick="setRadarDatePreset(0)">今天</button>
+                        </div>
+
+                        <span id="radarDateRangeSummary" class="radar-date-range-summary"></span>
+
+                        <!-- 双月面板弹层 -->
+                        <div class="radar-date-picker" id="radarDatePicker" style="display: none;"
+                            onclick="event.stopPropagation()">
+                            <div class="radar-date-picker-body">
+                                <button type="button" class="radar-date-nav" title="上一月"
+                                    onclick="radarDateShiftMonth(-1)">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="15 18 9 12 15 6" />
+                                    </svg>
+                                </button>
+                                <div class="radar-date-months" id="radarDateMonths"></div>
+                                <button type="button" class="radar-date-nav" title="下一月"
+                                    onclick="radarDateShiftMonth(1)">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="9 18 15 12 9 6" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="radar-date-picker-footer">
+                                <span class="radar-date-picker-hint" id="radarDatePickerHint"></span>
+                                <div class="radar-date-picker-actions">
+                                    <button type="button" class="radar-date-btn"
+                                        onclick="cancelRadarDatePicker()">取消</button>
+                                    <button type="button" class="radar-date-btn is-primary"
+                                        onclick="confirmRadarDateRange()">确定</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="radarVideosList">
+                        <table class="data-table" id="radarVideosTable">
+                            <thead>
+                                <tr>
+                                    <th style="width: 60px;">标记</th>
+                                    <th style="width: 80px;">封面</th>
+                                    <th>标题</th>
+                                    <th style="width: 340px;" id="radarThLike"
+                                        onclick="sortRadarVideosByColumn('like_count')" class="sortable-th">
+                                        互动数据</th>
+                                    <th style="width: 140px;" id="radarThCreatetime"
+                                        onclick="sortRadarVideosByColumn('createtime')" class="sortable-th">
+                                        发布时间</th>
+                                    <th style="width: 140px;" id="radarThFirstSeen"
+                                        onclick="sortRadarVideosByColumn('first_seen_at')" class="sortable-th">
+                                        首次发现</th>
+                                    <th style="width: 140px;" id="radarThLastSeen">最后更新</th>
+                                    <th style="width: 100px;">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="radarVideosTableBody">
+                                <tr>
+                                    <td colspan="8"
+                                        style="text-align: center; color: var(--text-secondary); padding: 40px;">
+                                        加载中...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="pagination" id="radarVideosPagination"></div>
+                </div>
+            </div>
+
             <!-- Help Page -->
             <div class="page-view" id="page-help">
                 <div class="card">
@@ -1460,9 +1706,6 @@
             </div>
         </main>
     </div>
-
-    <!-- Message Area -->
-    <div id="messageArea" style="position: fixed; top: 20px; right: 20px; z-index: 1000;"></div>
 
     <!-- Export Dialog - Requirements: 4.1, 4.2, 4.4 -->
     <div class="dialog-overlay" id="exportDialogOverlay" onclick="closeExportDialog(event)">
@@ -1926,14 +2169,15 @@
     <div class="message-area" id="messageArea"></div>
 
     <!-- JS Modules -->
-    <script src="js/core.js?v=20260827"></script>
-    <script src="js/ui.js?v=20260827"></script>
-    <script src="js/pages-official-account.js?v=20260828"></script>
-    <script src="js/radar.js?v=20260827"></script>
-    <script src="js/pages-browse.js?v=20260827"></script>
-    <script src="js/pages-download.js?v=20260827"></script>
-    <script src="js/pages-settings.js?v=20260827"></script>
-    <script src="js/video-player.js?v=20260827"></script>
+    <script src="js/core.js?v=20260929"></script>
+    <script src="js/ui.js?v=20260929"></script>
+    <script src="js/pages-official-account.js?v=20260929"></script>
+    <script src="js/radar.js?v=20260929"></script>
+    <script src="js/pages-radar-videos.js?v=20260929"></script>
+    <script src="js/pages-browse.js?v=20260929"></script>
+    <script src="js/pages-download.js?v=20260929"></script>
+    <script src="js/pages-settings.js?v=20260929"></script>
+    <script src="js/video-player.js?v=20260929"></script>
 </body>
 
 </html>

@@ -36,6 +36,18 @@ const (
 	SettingKeyMaxRetries                  = "max_retries"
 	SettingKeyRadarEnabled                = "radar_enabled"
 	SettingKeyTheme                       = "theme"
+
+	// 雷达采集开关。这些刻意不放进 Settings 结构体：设置页的 PUT 会整体回写
+	// Settings，未知的字段会被重置为默认值，从而悄悄关掉用户的采集配置。
+	SettingKeyRadarAutoDownload = "radar_auto_download"
+	SettingKeyRadarMaxPages     = "radar_max_pages"
+)
+
+// 雷达采集默认值
+const (
+	DefaultRadarMaxPages     = 3
+	MaxRadarMaxPages         = 20
+	DefaultRadarAutoDownload = false
 )
 
 // Get 根据键获取设置值

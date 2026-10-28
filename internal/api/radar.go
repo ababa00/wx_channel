@@ -2,23 +2,65 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
 	"wx_channel/internal/database"
 	"wx_channel/internal/response"
+	"wx_channel/internal/services"
 )
 
 // RadarServiceAPI 处理雷达监控相关的 API
 type RadarServiceAPI struct {
-	repo *database.RadarRepository
+	repo      *database.RadarRepository
+	videoRepo *database.RadarVideoRepository
+	// radar 由 app 启动后注入，用于「一键同步」。为 nil 时同步接口返回未就绪，
+	// 不影响其它雷达接口。
+	radar *services.RadarService
 }
 
 // NewRadarServiceAPI 创建雷达服务 API 处理器
 func NewRadarServiceAPI() *RadarServiceAPI {
 	return &RadarServiceAPI{
-		repo: database.NewRadarRepository(),
+		repo:      database.NewRadarRepository(),
+		videoRepo: database.NewRadarVideoRepository(),
 	}
+}
+
+// SetRadarService 注入后台轮询服务，供手动同步使用
+func (h *RadarServiceAPI) SetRadarService(svc *services.RadarService) {
+	if h != nil {
+		h.radar = svc
+	}
+}
+
+// SyncRadarVideos 立即触发一次采集，忽略各账号的轮询间隔。
+// 已存在的视频会被重新拉取以刷新点赞等互动数。
+func (h *RadarServiceAPI) SyncRadarVideos(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		response.ErrorWithStatus(w, http.StatusMethodNotAllowed, 405, "请使用 POST 请求")
+		return
+	}
+	if h.radar == nil {
+		response.ErrorWithStatus(w, http.StatusServiceUnavailable, 503, "雷达服务未就绪")
+		return
+	}
+
+	result, err := h.radar.SyncNow()
+	switch {
+	case errors.Is(err, services.ErrSyncRunning):
+		response.ErrorWithStatus(w, http.StatusConflict, 409, err.Error())
+		return
+	case errors.Is(err, services.ErrNoWeChatClient):
+		response.ErrorWithStatus(w, http.StatusServiceUnavailable, 503, err.Error())
+		return
+	case err != nil:
+		response.ErrorWithStatus(w, http.StatusInternalServerError, 500, err.Error())
+		return
+	}
+
+	response.Success(w, result)
 }
 
 // GetTargets 获取所有监控目标
@@ -205,5 +247,41 @@ func (h *RadarServiceAPI) RegisterRoutes(mux *http.ServeMux) {
 		default:
 			response.Error(w, http.StatusMethodNotAllowed, "不允许的请求方法")
 		}
+	})
+
+	// 雷达采集到的视频数据（控制台「视频数据」页签）
+	mux.HandleFunc("/api/v1/radar/videos", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.GetRadarVideos(w, r)
+		case http.MethodDelete:
+			h.DeleteRadarVideos(w, r)
+		default:
+			response.Error(w, http.StatusMethodNotAllowed, "不允许的请求方法")
+		}
+	})
+
+	mux.HandleFunc("/api/v1/radar/videos/stats", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			response.Error(w, http.StatusMethodNotAllowed, "不允许的请求方法")
+			return
+		}
+		h.GetRadarVideoStats(w, r)
+	})
+
+	mux.HandleFunc("/api/v1/radar/config", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.GetRadarCaptureConfig(w, r)
+		case http.MethodPut:
+			h.UpdateRadarCaptureConfig(w, r)
+		default:
+			response.Error(w, http.StatusMethodNotAllowed, "不允许的请求方法")
+		}
+	})
+
+	// 一键同步：立刻采集一次，忽略各账号的轮询间隔
+	mux.HandleFunc("/api/v1/radar/sync", func(w http.ResponseWriter, r *http.Request) {
+		h.SyncRadarVideos(w, r)
 	})
 }

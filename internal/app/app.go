@@ -245,6 +245,10 @@ func (app *App) Run() {
 		app.ArticleArchiveHandler.SetConnections(app.Cfg.DownloadConnections)
 		app.APIRouter.SetArticleArchiveHandler(app.ArticleArchiveHandler)
 	}
+	// 把后台雷达注入 API 路由，控制台的「一键同步」才能直接触发采集
+	if app.RadarService != nil {
+		app.APIRouter.SetRadarService(app.RadarService)
+	}
 
 	// 初始化静态文件处理器
 	app.StaticFileHandler = handlers.NewStaticFileHandler()

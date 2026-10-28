@@ -7,6 +7,7 @@ import (
 	"wx_channel/internal/config"
 	"wx_channel/internal/handlers"
 	"wx_channel/internal/officialaccount"
+	"wx_channel/internal/services"
 	"wx_channel/internal/websocket"
 
 	"strings"
@@ -52,6 +53,16 @@ func (r *APIRouter) SetArticleArchiveHandler(handler *handlers.ArticleArchiveHan
 	}
 	handler.RegisterRoutes(r.mux)
 	r.articleArchiveRoutesRegistered = true
+}
+
+// SetRadarService injects the background radar poller so the console can trigger
+// an immediate collection. The radar routes themselves are always mounted; only
+// the manual-sync endpoint depends on this being present.
+func (r *APIRouter) SetRadarService(service *services.RadarService) {
+	if r == nil || service == nil || r.radarAPI == nil {
+		return
+	}
+	r.radarAPI.SetRadarService(service)
 }
 
 // Handle implements Interceptor
